@@ -1,0 +1,80 @@
+"""
+Embedded Python Blocks:
+
+Each time this file is saved, GRC will instantiate the first class it finds
+to get ports and parameters of your block. The arguments to __init__  will
+be the parameters. All of them are required to have default values!
+"""
+
+import numpy as np
+from gnuradio import gr
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.decomposition import PCA
+from matplotlib.colors import ListedColormap
+import matplotlib.pyplot as plt
+import pickle
+
+class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
+    """Embedded Python Block example - a simple multiply const"""
+
+    def __init__(self, model_file='sine_wave_classifier.pkl', signals_file="C:\\Users\\Admin\\OneDrive\\Escritorio\\DOCTORADO TEC\\DATASET\\signals_dataset.npy"):  # only default arguments here
+        """arguments to this function show up as parameters in GRC"""
+        gr.sync_block.__init__(
+            self,
+            name='Sine Wave Classifier',   # will show up in GRC
+            in_sig=[np.float32],
+            out_sig=[np.float32] # Output is 1 for sine, 0 for not sine
+        )
+        self.model_file = model_file
+        self.signals_file = signals_file
+        self.load_and_train_model()
+        
+    def load_and_train_model(self):
+        # Load the sine wave dataset
+        signals = np.load(self.signals_file)
+        y_signals = np.ones(signals.shape[0])  # Label 1 for sine waves
+
+        # Generate noise data
+        num_noise_signals = 100
+        noise_signals = np.random.rand(num_noise_signals, signals.shape[1])
+        y_noise = np.zeros(num_noise_signals)
+
+        # Combine and preprocess data
+        X = np.vstack([signals, noise_signals])
+        y = np.concatenate([y_signals, y_noise])
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        self.scaler = StandardScaler()
+        X_train = self.scaler.fit_transform(X_train)
+        X_test = self.scaler.transform(X_test)
+
+        # Train the SVM model
+        self.model = SVC(kernel='rbf', random_state=42)
+        self.model.fit(X_train, y_train)
+        
+        # Save the model and scaler
+        with open(self.model_file, 'wb') as f:
+            pickle.dump((self.model, self.scaler), f) 
+        print(f"Model and scaler saved to {self.model_file}")
+
+    def work(self, input_items, output_items):
+        """Classifies the input signal and sets the output to 1 for sine, 0 for not sine."""
+        in_signal = input_items[0]
+        
+        # Reshape the input signal into segments of 100 samples
+        num_segments = len(in_signal) // 100  # Calculate the number of segments
+        segments = in_signal[:num_segments * 100].reshape(num_segments, 100)  
+
+        # Apply scaling and prediction to each segment
+        for segment in segments:
+            segment_reshaped = segment.reshape(1, -1)
+            segment_scaled = self.scaler.transform(segment_reshaped)
+            prediction = self.model.predict(segment_scaled)
+            
+            # Output the prediction for the current segment
+            output_items[0][:] = prediction[0] 
+            
+        return len(output_items[0])
