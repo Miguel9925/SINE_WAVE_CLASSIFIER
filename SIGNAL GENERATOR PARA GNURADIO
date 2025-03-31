@@ -1,0 +1,66 @@
+"""
+Embedded Python Blocks:
+
+Each time this file is saved, GRC will instantiate the first class it finds
+to get ports and parameters of your block. The arguments to __init__  will
+be the parameters. All of them are required to have default values!
+"""
+
+import numpy as np
+from gnuradio import gr
+
+
+class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
+    """Generates random sine wave signals"""
+
+    def __init__(self, num_signals=100, sampling_rate=100, time_duration=1,
+                 frequency_range=(1, 10), amplitude_range=(0.5, 1.5), phase_range=(0, 2 * np.pi),
+                 signal_to_observe=0):  # only default arguments here
+
+        """Constructor"""
+        gr.sync_block.__init__(
+            self,
+            name='Signal generator',   # will show up in GRC
+            in_sig=None,
+            out_sig=[np.float32] # Output signal type
+        )
+        self.num_signals = num_signals
+        self.sampling_rate = sampling_rate
+        self.time_duration = time_duration
+        self.frequency_range = frequency_range
+        self.amplitude_range = amplitude_range
+        self.phase_range = phase_range
+
+        # Generate all signals in the constructor
+        self.all_signals = []
+        for _ in range(self.num_signals):
+            frequency = np.random.uniform(*self.frequency_range)
+            amplitude = np.random.uniform(*self.amplitude_range)
+            phase = np.random.uniform(*self.phase_range)
+            time = np.linspace(0, self.time_duration, int(self.sampling_rate * self.time_duration))
+            signal = amplitude * np.sin(2 * np.pi * frequency * time + phase)
+            self.all_signals.append(signal)
+
+        self.all_signals = np.concatenate(self.all_signals)  # Concatenate signals
+        self.signal_to_observe = signal_to_observe
+        self.signal_length = int(self.sampling_rate * self.time_duration)
+        self.current_index = 0 
+        
+
+    def work(self, input_items, output_items):
+        
+        """Generates and output signals"""
+
+        # Calculate the start and end indices of the selected signal
+        start_index = self.signal_to_observe * self.signal_length
+        end_index = start_index + self.signal_length
+
+        # Extract the selected signal from the buffer
+        selected_signal = self.all_signals[start_index:end_index]
+
+        # Adjust output length to match selected signal length
+        output_len = min(len(output_items[0]), len(selected_signal)) 
+        
+        # Output the selected signal, ensuring size compatibility
+        output_items[0][:output_len] = selected_signal[:output_len]  
+        return output_len
