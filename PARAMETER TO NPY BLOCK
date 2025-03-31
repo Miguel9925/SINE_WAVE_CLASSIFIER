@@ -1,0 +1,49 @@
+"""
+Embedded Python Blocks:
+
+Each time this file is saved, GRC will instantiate the first class it finds
+to get ports and parameters of your block. The arguments to __init__  will
+be the parameters. All of them are required to have default values!
+"""
+
+import numpy as np
+from gnuradio import gr
+import pmt
+
+class blk(gr.sync_block):
+    """Receives signal parameters and saves to NPY with header."""
+
+    def __init__(self, filename="C:\\Users\\Admin\\OneDrive\\Escritorio\\DOCTORADO TEC\\DATASET\\signals_datasettwo.npy", max_signals=100):  
+        gr.sync_block.__init__(
+            self,
+            name='parameter_to_npy_block',  # will show up in GRC
+            in_sig=None,
+            out_sig=None
+        )
+        self.filename = filename
+        self.max_signals = max_signals
+        self.signal_parameters = []  # Store parameters
+        self.message_port_register_in(pmt.intern('store_signals'))
+        self.set_msg_handler(pmt.intern('store_signals'), self.handle_message)
+
+    def handle_message(self, msg):
+        """Handles the incoming message and appends data."""
+        signal_parameters = pmt.to_python(msg)
+        self.signal_parameters.append(signal_parameters)
+
+        if len(self.signal_parameters) >= self.max_signals:
+            try:
+                # Create a NumPy array
+                signals_array = np.array(self.signal_parameters)
+                # Create a header
+                header = "Frequency,Amplitude,Phase"
+                # Save data with header
+                np.savez(self.filename, data=signals_array, header=header)
+                print(f"Dataset saved to '{self.filename}'")
+                self.signal_parameters = []  # Reset after saving
+                self.stop() # Stop the flowgraph if desired
+            except Exception as e:
+                print(f"Error saving dataset: {e}")
+
+    def work(self, input_items, output_items):
+        return 0
