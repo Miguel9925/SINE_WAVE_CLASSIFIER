@@ -1,0 +1,51 @@
+"""
+Embedded Python Blocks:
+
+Each time this file is saved, GRC will instantiate the first class it finds
+to get ports and parameters of your block. The arguments to __init__  will
+be the parameters. All of them are required to have default values!
+"""
+
+import numpy as np
+from gnuradio import gr
+import pmt
+
+class blk(gr.sync_block):
+    """Extracts frequency, amplitude, and phase of signals."""
+
+    def __init__(self, sampling_rate=100):
+        gr.sync_block.__init__(
+            self,
+            name='signal_parameter_extractor',  # will show up in GRC
+            in_sig=[np.float32],
+            out_sig=None
+        )
+        self.sampling_rate = sampling_rate
+        self.message_port_register_out(pmt.intern('store_signals'))
+
+    def extract_signal_parameters(self, signal):
+        """Extracts frequency, amplitude, and phase from a signal using FFT."""
+        frequencies = np.fft.fftfreq(len(signal), 1/self.sampling_rate)
+        fft_values = np.fft.fft(signal)
+
+        dominant_frequency_index = np.argmax(np.abs(fft_values))
+        dominant_frequency = frequencies[dominant_frequency_index]
+
+        amplitude = np.abs(fft_values[dominant_frequency_index]) / len(signal) * 2
+        phase = np.angle(fft_values[dominant_frequency_index])
+
+        return dominant_frequency, amplitude, phase
+
+    def work(self, input_items, output_items):
+        """Processes incoming signal and sends parameters as a message."""
+
+        in_signal = input_items[0]
+
+        # Assuming in_signal contains a single signal
+        frequency, amplitude, phase = self.extract_signal_parameters(in_signal)
+        
+        # Send the parameters as a message
+        signal_parameters = [frequency, amplitude, phase]
+        self.message_port_pub(pmt.intern('store_signals'), pmt.to_pmt(signal_parameters))
+        
+        return len(in_signal)
