@@ -30,6 +30,7 @@ class blk(gr.sync_block):
 
         dominant_frequency_index = np.argmax(np.abs(fft_values))
         dominant_frequency = frequencies[dominant_frequency_index]
+        dominant_frequency = abs(dominant_frequency)  # Take the absolute value
 
         amplitude = np.abs(fft_values[dominant_frequency_index]) / len(signal) * 2
         phase = np.angle(fft_values[dominant_frequency_index])
