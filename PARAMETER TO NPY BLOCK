@@ -11,12 +11,12 @@ from gnuradio import gr
 import pmt
 
 class blk(gr.sync_block):
-    """Receives signal parameters and saves to NPY with header."""
+    """Receives signal parameters and saves to NPY without header."""
 
-    def __init__(self, filename="C:\\Users\\Admin\\OneDrive\\Escritorio\\DOCTORADO TEC\\DATASET\\signals_datasettwo.npy", max_signals=100):  
+    def __init__(self, filename="signals_datasettwo.npy", max_signals=100):  
         gr.sync_block.__init__(
             self,
-            name='parameter_to_npy_block',  # will show up in GRC
+            name='parameter_to_npy_block_two',  # will show up in GRC
             in_sig=None,
             out_sig=None
         )
@@ -35,10 +35,8 @@ class blk(gr.sync_block):
             try:
                 # Create a NumPy array
                 signals_array = np.array(self.signal_parameters)
-                # Create a header
-                header = "Frequency,Amplitude,Phase"
-                # Save data with header
-                np.savez(self.filename, data=signals_array, header=header)
+                # Save data without header (using .npy format)
+                np.save(self.filename, signals_array) 
                 print(f"Dataset saved to '{self.filename}'")
                 self.signal_parameters = []  # Reset after saving
                 self.stop() # Stop the flowgraph if desired
