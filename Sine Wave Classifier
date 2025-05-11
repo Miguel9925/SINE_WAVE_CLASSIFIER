@@ -1,80 +1,86 @@
-"""
-Embedded Python Blocks:
-
-Each time this file is saved, GRC will instantiate the first class it finds
-to get ports and parameters of your block. The arguments to __init__  will
-be the parameters. All of them are required to have default values!
-"""
-
+!pip install numpy matplotlib scikit-learn
 import numpy as np
-from gnuradio import gr
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-from sklearn.decomposition import PCA
-from matplotlib.colors import ListedColormap
+from sklearn.svm import SVC  # Import regular SVC
 import matplotlib.pyplot as plt
-import pickle
 
-class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
-    """Embedded Python Block example - a simple multiply const"""
+# 1. Cargar el dataset original (señales senoidales)
+signals = np.load('signals_datasettwo.npy')
+y_signals = np.ones(signals.shape[0])  # Etiqueta 1 para señales senoidales
 
-    def __init__(self, model_file='sine_wave_classifier.pkl', signals_file="C:\\Users\\Admin\\OneDrive\\Escritorio\\DOCTORADO TEC\\DATASET\\signals_dataset.npy"):  # only default arguments here
-        """arguments to this function show up as parameters in GRC"""
-        gr.sync_block.__init__(
-            self,
-            name='Sine Wave Classifier',   # will show up in GRC
-            in_sig=[np.float32],
-            out_sig=[np.float32] # Output is 1 for sine, 0 for not sine
-        )
-        self.model_file = model_file
-        self.signals_file = signals_file
-        self.load_and_train_model()
-        
-    def load_and_train_model(self):
-        # Load the sine wave dataset
-        signals = np.load(self.signals_file)
-        y_signals = np.ones(signals.shape[0])  # Label 1 for sine waves
+# 2. Crear un dataset de señales "no senoidales" (ejemplo: ruido aleatorio)
+num_noise_signals = 100  # Número de señales de ruido a generar
+noise_signals = np.random.rand(num_noise_signals, signals.shape[1])
+y_noise = np.zeros(num_noise_signals)  # Etiqueta 0 para señales de ruido
 
-        # Generate noise data
-        num_noise_signals = 100
-        noise_signals = np.random.rand(num_noise_signals, signals.shape[1])
-        y_noise = np.zeros(num_noise_signals)
+# 3. Combinar los datasets y etiquetas
+X = np.vstack([signals, noise_signals])
+y = np.concatenate([y_signals, y_noise])
 
-        # Combine and preprocess data
-        X = np.vstack([signals, noise_signals])
-        y = np.concatenate([y_signals, y_noise])
+# 4. Dividir en conjuntos de entrenamiento y prueba
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# 5. Escalar los datos
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
-        self.scaler = StandardScaler()
-        X_train = self.scaler.fit_transform(X_train)
-        X_test = self.scaler.transform(X_test)
+# 6. Entrenar un modelo SVM regular
+model = SVC(kernel='rbf', random_state=42)  # Usar SVC en lugar de OneClassSVM
+model.fit(X_train, y_train)
 
-        # Train the SVM model
-        self.model = SVC(kernel='rbf', random_state=42)
-        self.model.fit(X_train, y_train)
-        
-        # Save the model and scaler
-        with open(self.model_file, 'wb') as f:
-            pickle.dump((self.model, self.scaler), f) 
-        print(f"Model and scaler saved to {self.model_file}")
+# Función para clasificar una señal de entrada
+def classify_signal(input_signal, model, scaler):
+    """
+    Classifies an input signal as a sine wave or not.
 
-    def work(self, input_items, output_items):
-        """Classifies the input signal and sets the output to 1 for sine, 0 for not sine."""
-        in_signal = input_items[0]
-        
-        # Reshape the input signal into segments of 100 samples
-        num_segments = len(in_signal) // 100  # Calculate the number of segments
-        segments = in_signal[:num_segments * 100].reshape(num_segments, 100)  
+    Args:
+        input_signal (array): The input signal data.
+        model (SVC): The trained SVM model.
+        scaler (StandardScaler): The scaler used for preprocessing.
 
-        # Apply scaling and prediction to each segment
-        for segment in segments:
-            segment_reshaped = segment.reshape(1, -1)
-            segment_scaled = self.scaler.transform(segment_reshaped)
-            prediction = self.model.predict(segment_scaled)
-            
-            # Output the prediction for the current segment
-            output_items[0][:] = prediction[0] 
-            
-        return len(output_items[0])
+    Returns:
+        bool: True if the input signal is classified as a sine wave, False otherwise.
+    """
+
+    # Extract features from the input signal (e.g., using FFT)
+    frequencies = np.fft.fftfreq(len(input_signal), 1/100)  # Assuming sampling rate is 100
+    fft_values = np.fft.fft(input_signal)
+    dominant_frequency_index = np.argmax(np.abs(fft_values))
+    frequency = frequencies[dominant_frequency_index]
+    amplitude = np.abs(fft_values[dominant_frequency_index]) / len(input_signal) * 2
+    phase = np.angle(fft_values[dominant_frequency_index])
+
+    # Create a feature vector with the extracted features
+    features = np.array([amplitude, frequency, phase]).reshape(1, -1)
+
+    # Apply scaling to the feature vector
+    input_signal_scaled = scaler.transform(features)
+
+    # Make the prediction
+    prediction = model.predict(input_signal_scaled)
+    is_sine_wave = prediction[0] == 1  # 1 indicates sine wave
+
+    return is_sine_wave
+
+# Ejemplo de uso:
+input_signal = np.random.rand(100)  # Señal de ruido
+#input_signal = np.sin(2 * np.pi * 5 * np.linspace(0, 1, 100))  # Señal senoidal
+
+# Clasificar la señal
+result = classify_signal(input_signal, model, scaler)
+
+if result:
+    print("La señal de entrada es clasificada como una onda seno.")
+else:
+    print("La señal de entrada NO es clasificada como una onda seno.")
+
+# (Opcional) Graficar la señal de entrada
+plt.figure(figsize=(8, 6))
+plt.plot(input_signal)
+plt.title("Señal de Entrada")
+plt.xlabel("Tiempo (muestras)")
+plt.ylabel("Amplitud")
+plt.grid(True)
+plt.show()
