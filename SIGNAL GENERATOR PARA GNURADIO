@@ -1,11 +1,3 @@
-"""
-Embedded Python Blocks:
-
-Each time this file is saved, GRC will instantiate the first class it finds
-to get ports and parameters of your block. The arguments to __init__  will
-be the parameters. All of them are required to have default values!
-"""
-
 import numpy as np
 from gnuradio import gr
 
@@ -14,13 +6,12 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
     """Generates random sine wave signals"""
 
     def __init__(self, num_signals=100, sampling_rate=100, time_duration=1,
-                 frequency_range=(1, 10), amplitude_range=(0.5, 1.5), phase_range=(0, 2 * np.pi),
-                 signal_to_observe=0):  # only default arguments here
+                 frequency_range=(1, 10), amplitude_range=(0.5, 1.5), phase_range=(0, 2 * np.pi)):  # only default arguments here
 
         """Constructor"""
         gr.sync_block.__init__(
             self,
-            name='Signal generator',   # will show up in GRC
+            name='Signal_generator_two',   # will show up in GRC
             in_sig=None,
             out_sig=[np.float32] # Output signal type
         )
@@ -37,30 +28,32 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
             frequency = np.random.uniform(*self.frequency_range)
             amplitude = np.random.uniform(*self.amplitude_range)
             phase = np.random.uniform(*self.phase_range)
+        # Corrección de la fase al rango [0, 2π)
+            phase = (phase + 2 * np.pi) % (2 * np.pi) 
             time = np.linspace(0, self.time_duration, int(self.sampling_rate * self.time_duration))
             signal = amplitude * np.sin(2 * np.pi * frequency * time + phase)
             self.all_signals.append(signal)
 
-        self.all_signals = np.concatenate(self.all_signals)  # Concatenate signals
-        self.signal_to_observe = signal_to_observe
         self.signal_length = int(self.sampling_rate * self.time_duration)
-        self.current_index = 0 
-        
+        self.current_signal_index = 0 
 
     def work(self, input_items, output_items):
-        
-        """Generates and output signals"""
+        """Generates and outputs signals sequentially"""
 
-        # Calculate the start and end indices of the selected signal
-        start_index = self.signal_to_observe * self.signal_length
+        # Calculate the start and end indices of the current signal
+        start_index = self.current_signal_index * self.signal_length
         end_index = start_index + self.signal_length
 
-        # Extract the selected signal from the buffer
-        selected_signal = self.all_signals[start_index:end_index]
+        # Extract the current signal from the buffer
+        current_signal = self.all_signals[self.current_signal_index]
 
-        # Adjust output length to match selected signal length
-        output_len = min(len(output_items[0]), len(selected_signal)) 
-        
-        # Output the selected signal, ensuring size compatibility
-        output_items[0][:output_len] = selected_signal[:output_len]  
+        # Adjust output length to match current signal length
+        output_len = min(len(output_items[0]), len(current_signal))
+
+        # Output the current signal, ensuring size compatibility
+        output_items[0][:output_len] = current_signal[:output_len] 
+
+        # Move to the next signal, looping back to the beginning if necessary
+        self.current_signal_index = (self.current_signal_index + 1) % self.num_signals 
+
         return output_len
