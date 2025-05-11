@@ -16,7 +16,7 @@ class blk(gr.sync_block):
     def __init__(self, sampling_rate=100):
         gr.sync_block.__init__(
             self,
-            name='signal_parameter_extractor',  # will show up in GRC
+            name='signal_parameter_extractor_two',  # will show up in GRC
             in_sig=[np.float32],
             out_sig=None
         )
